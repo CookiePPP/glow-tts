@@ -47,7 +47,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, best_val_loss=None):
   return model, optimizer, learning_rate, iteration, best_val_loss
 
 
-def save_checkpoint(model, optimizer, learning_rate, iteration, best_val_loss, checkpoint_path):
+def save_checkpoint(model, optimizer, hps, learning_rate, iteration, best_val_loss, checkpoint_path):
   logger.info("Saving model and optimizer state at iteration {} to {}".format(
     iteration, checkpoint_path))
   if hasattr(model, 'module'):
@@ -57,6 +57,7 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, best_val_loss, c
   torch.save({'model': state_dict,
               'iteration': iteration,
               'optimizer': optimizer.state_dict(),
+              'hps': hps,
               'best_val_loss': best_val_loss,
               'learning_rate': learning_rate}, checkpoint_path)
 

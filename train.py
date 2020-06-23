@@ -90,10 +90,10 @@ def train_and_eval(rank, n_gpus, hps):
       val_loss = evaluate(rank, epoch, hps, generator, optimizer_g, val_loader, logger, writer_eval)
       if val_loss < best_val_loss:
         best_val_loss = val_loss
-        utils.save_checkpoint(generator, optimizer_g, hps.train.learning_rate, epoch, best_val_loss, os.path.join(hps.model_dir, "best_val_model.pth"))
-      utils.save_checkpoint(generator, optimizer_g, hps.train.learning_rate, epoch, val_loss, os.path.join(hps.model_dir, "G_{}.pth".format(epoch)))
-      if hp.train.max_checkpoints > 0:
-        utils.remove_old_checkpoints(hps.model_dir, hp.train.max_checkpoints)
+        utils.save_checkpoint(generator, optimizer_g, hps, hps.train.learning_rate, epoch, best_val_loss, os.path.join(hps.model_dir, "best_val_model.pth"))
+      utils.save_checkpoint(generator, optimizer_g, hps, hps.train.learning_rate, epoch, val_loss, os.path.join(hps.model_dir, "G_{}.pth".format(epoch)))
+      if hps.train.max_checkpoints > 0:
+        utils.remove_old_checkpoints(hps.model_dir, hps.train.max_checkpoints)
     else:
       train(rank, epoch, hps, generator, optimizer_g, train_loader, None, None)
 
