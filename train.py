@@ -73,8 +73,9 @@ def train_and_eval(rank, n_gpus, hps):
   generator = DDP(generator)
   epoch_str = 1
   global_step = 0
+  best_val_loss = 1e9
   try:
-    _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), generator, optimizer_g)
+    _, _, _, epoch_str, best_val_loss = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), generator, optimizer_g, best_val_loss)
     epoch_str += 1
     optimizer_g.step_num = (epoch_str - 1) * len(train_loader)
     optimizer_g._update_learning_rate()
@@ -86,8 +87,11 @@ def train_and_eval(rank, n_gpus, hps):
   for epoch in range(epoch_str, hps.train.epochs + 1):
     if rank==0:
       train(rank, epoch, hps, generator, optimizer_g, train_loader, logger, writer)
-      evaluate(rank, epoch, hps, generator, optimizer_g, val_loader, logger, writer_eval)
-      utils.save_checkpoint(generator, optimizer_g, hps.train.learning_rate, epoch, os.path.join(hps.model_dir, "G_{}.pth".format(epoch)))
+      val_loss = evaluate(rank, epoch, hps, generator, optimizer_g, val_loader, logger, writer_eval)
+      best_val_loss = min(val_loss, best_val_loss)
+      utils.save_checkpoint(generator, optimizer_g, hps.train.learning_rate, epoch, best_val_loss, os.path.join(hps.model_dir, "G_{}.pth".format(epoch)))
+      if hp.train.max_checkpoints > 0:
+        utils.remove_old_checkpoints(hps.model_dir, hp.train.max_checkpoints)
     else:
       train(rank, epoch, hps, generator, optimizer_g, train_loader, None, None)
 
@@ -160,7 +164,7 @@ def evaluate(rank, epoch, hps, generator, optimizer_g, val_loader, logger, write
         l_mle = 0.5 * math.log(2 * math.pi) + (torch.sum(y_logs) + 0.5 * torch.sum(torch.exp(-2 * y_logs) * (z - y_m)**2) - torch.sum(logdet)) / (torch.sum(y_lengths // hps.model.n_sqz) * hps.model.n_sqz * hps.data.n_mel_channels)
         l_length = torch.sum((logw - logw_)**2) / torch.sum(x_lengths)
         loss_gs = [l_mle, l_length]
-        loss_g = sum(loss_gs)
+        loss_g = sum(loss_gs).item()
 
         if batch_idx == 0:
           losses_tot = loss_gs
@@ -171,7 +175,7 @@ def evaluate(rank, epoch, hps, generator, optimizer_g, val_loader, logger, write
           logger.info('Eval Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
             epoch, batch_idx * len(x), len(val_loader.dataset),
             100. * batch_idx / len(val_loader),
-            loss_g.item()))
+            loss_g))
           logger.info([x.item() for x in loss_gs])
            
     
@@ -184,6 +188,7 @@ def evaluate(rank, epoch, hps, generator, optimizer_g, val_loader, logger, write
       global_step=global_step, 
       scalars=scalar_dict)
     logger.info('====> Epoch: {}'.format(epoch))
+    return loss_g
 
                            
 if __name__ == "__main__":

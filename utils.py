@@ -14,7 +14,7 @@ MATPLOTLIB_FLAG = False
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging
 
-def load_checkpoint(checkpoint_path, model, optimizer=None):
+def load_checkpoint(checkpoint_path, model, optimizer=None, best_val_loss=None):
   assert os.path.isfile(checkpoint_path)
   checkpoint_dict = torch.load(checkpoint_path, map_location='cpu')
   iteration = 1
@@ -22,6 +22,8 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     iteration = checkpoint_dict['iteration']
   if 'learning_rate' in checkpoint_dict.keys():
     learning_rate = checkpoint_dict['learning_rate']
+  if 'best_val_loss' in checkpoint_dict.keys():
+    best_val_loss = checkpoint_dict['best_val_loss']
   if optimizer is not None and 'optimizer' in checkpoint_dict.keys():
     optimizer.load_state_dict(checkpoint_dict['optimizer'])
   saved_state_dict = checkpoint_dict['model']
@@ -42,10 +44,10 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     model.load_state_dict(new_state_dict)
   logger.info("Loaded checkpoint '{}' (iteration {})" .format(
     checkpoint_path, iteration))
-  return model, optimizer, learning_rate, iteration
+  return model, optimizer, learning_rate, iteration, best_val_loss
 
 
-def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path):
+def save_checkpoint(model, optimizer, learning_rate, iteration, best_val_loss, checkpoint_path):
   logger.info("Saving model and optimizer state at iteration {} to {}".format(
     iteration, checkpoint_path))
   if hasattr(model, 'module'):
@@ -55,6 +57,7 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
   torch.save({'model': state_dict,
               'iteration': iteration,
               'optimizer': optimizer.state_dict(),
+              'best_val_loss': best_val_loss,
               'learning_rate': learning_rate}, checkpoint_path)
 
 
@@ -73,6 +76,13 @@ def latest_checkpoint_path(dir_path, regex="G_*.pth"):
   x = f_list[-1]
   print(x)
   return x
+
+
+def remove_old_checkpoints(dir_path, max_checkpoints, regex="G_*.pth"):
+  f_list = glob.glob(os.path.join(dir_path, regex))
+  f_list.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
+  for x in f_list[:-max_checkpoints]:
+    os.remove(x)
 
 
 def plot_spectrogram_to_numpy(spectrogram):
